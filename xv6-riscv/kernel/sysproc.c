@@ -9,9 +9,12 @@
 uint64
 sys_exit(void)
 {
+  
   int n;
   argint(0, &n);
-  exit(n);
+  char path[MAXPATH];
+  argstr(1, path, MAXPATH); 
+  exit(n, path);
   return 0;  // not reached
 }
 
@@ -30,9 +33,10 @@ sys_fork(void)
 uint64
 sys_wait(void)
 {
-  uint64 p;
-  argaddr(0, &p);
-  return wait(p);
+  uint64 p1, p2;
+  argaddr(0, &p1);
+  argaddr(1, &p2);
+  return wait(p1, p2);
 }
 
 uint64

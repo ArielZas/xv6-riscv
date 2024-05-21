@@ -13,6 +13,8 @@
 #include "kernel/fs.h"
 #include "kernel/fcntl.h"
 
+char buff[128];
+
 int
 main(int argc, char *argv[])
 {
@@ -43,7 +45,7 @@ main(int argc, char *argv[])
     read(fd, data, sizeof(data));
   close(fd);
 
-  wait(0);
+  wait(0,buff);
 
-  exit(0);
+  exit(0,"");
 }
