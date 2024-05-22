@@ -5,7 +5,6 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
-
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -55,6 +54,8 @@ procinit(void)
       initlock(&p->lock, "proc");
       p->state = UNUSED;
       p->kstack = KSTACK((int) (p - proc));
+      p->affinity_mask = 0;
+      p->effective_affinity_mask = 0;
   }
 }
 
@@ -124,6 +125,8 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+  p->affinity_mask = 0;
+  p->effective_affinity_mask = 0;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -170,6 +173,9 @@ freeproc(struct proc *p)
   p->xstate = 0;
   p->state = UNUSED;
   p->exit_msg[0] = 0;
+  p->affinity_mask = 0;
+  p->effective_affinity_mask = 0;
+  
 
 }
 
@@ -289,6 +295,10 @@ fork(void)
   if((np = allocproc()) == 0){
     return -1;
   }
+
+  // copy affinity mask
+  np->affinity_mask = p->affinity_mask;
+  np->effective_affinity_mask = np->affinity_mask;
 
   // Copy user memory from parent to child.
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
@@ -465,18 +475,26 @@ scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
-  
-  c->proc = 0;
+  int _cpuid = cpuid();
+  int mask = 1 << _cpuid;
+
+
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
 
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
-      if(p->state == RUNNABLE) {
+
+      if(p->state == RUNNABLE && (p->affinity_mask == 0 || ((p->effective_affinity_mask & mask) != 0))) {
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
         // before jumping back to us.
+        printf("\npid = %d , mask = %d, cpu id = %d\n", p->pid, p->effective_affinity_mask, _cpuid);
+        if(p->affinity_mask != 0)
+          p->effective_affinity_mask = p->effective_affinity_mask - mask;
+        if(p->effective_affinity_mask == 0)
+          p->effective_affinity_mask = p->affinity_mask;
         p->state = RUNNING;
         c->proc = p;
         swtch(&c->context, &p->context);
